@@ -18,7 +18,7 @@ struct Triangle
 class Rasterizer 
 {
 private:
-    sf::Image* mBitmap;
+    sf::Image* mCanvas;
     bool mDebugColors;
     std::function<sf::Color(int, int)> mColorCb;
 
@@ -26,21 +26,21 @@ public:
 
     void DrawLine(uint16_t sx, uint16_t sy, uint16_t ex, const sf::Color& color)
     {
-        ex = std::min(static_cast<uint16_t>(mBitmap->getSize().x), ex);
+        ex = std::min(static_cast<uint16_t>(mCanvas->getSize().x), ex);
 
         for (uint16_t cx = sx; cx < ex; cx++)
         {
-            mBitmap->setPixel(cx, sy, color);
+            mCanvas->setPixel(cx, sy, color);
         }
     }
 
     void DrawLine(uint16_t sx, uint16_t sy, uint16_t ex)
     {
-        ex = std::min(static_cast<uint16_t>(mBitmap->getSize().x), ex);
+        ex = std::min(static_cast<uint16_t>(mCanvas->getSize().x), ex);
 
         for (uint16_t cx = sx; cx < ex; cx++)
         {
-            mBitmap->setPixel(cx, sy, mColorCb(cx, sy));
+            mCanvas->setPixel(cx, sy, mColorCb(cx, sy));
         }
     }
 
