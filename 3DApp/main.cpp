@@ -23,6 +23,21 @@ struct Triangle {
     Vector3 mP3;
 };
 
+sf::Color ShaderFunction(int x, int y, float depth, const glm::mat4& invProj)
+{
+    float ndcX = (2.0f * x) / CANVAS_WIDTH + 0.5f;
+    float ndcY = (2.0f * y) / CANVAS_HEIGHT + 0.5f;
+
+    glm::vec4 clipSpacePos(ndcX, ndcY, depth, 1.0f);
+    glm::vec4 worldPos = invProj * clipSpacePos;
+
+    sf::Uint8 red = static_cast<sf::Uint8>(glm::clamp(((worldPos.x) * 255.0f), 0.0f, 255.0f));
+    sf::Uint8 green = static_cast<sf::Uint8>(glm::clamp(((worldPos.y) * 255.0f), 0.0f, 255.0f));
+    sf::Uint8 blue = static_cast<sf::Uint8>(glm::clamp(((worldPos.z) * 255.0f), 0.0f, 255.0f));
+
+    return sf::Color(red, green, blue);
+}
+
 class Rasterizer
 {
 private:
@@ -32,8 +47,8 @@ private:
     std::function<sf::Color(const Triangle*, const glm::vec3)> mColorCb;
 
 public:
-
-    sf::Color colorOverride;
+    glm::mat4 proj;
+    glm::mat4 invProj;
 
     float LerpZ(int startY, int endY, int currentY, float startZ, float endZ) {
         float t = (currentY - startY) / static_cast<float>(endY - startY);
@@ -45,7 +60,8 @@ public:
         if (zDepthBuffer[x + y * CANVAS_WIDTH] > zDepth)
         {
             zDepthBuffer[x + y * CANVAS_WIDTH] = zDepth;
-            mCanvas->setPixel(x, y, color);
+            sf::Color computedColor = ShaderFunction(x, y, zDepth, invProj);
+            mCanvas->setPixel(x, y, computedColor);
         }
     }
 
@@ -63,7 +79,7 @@ public:
 
         for (int cx = sx; cx <= ex; ++cx) {
             float z = LerpZ(sx, ex, cx, sz, ez);
-            SetPixel(cx, sy, z, colorOverride); 
+            SetPixel(cx, sy, z, sf::Color::White); 
         }
     }
 
@@ -101,6 +117,7 @@ public:
 
     void DrawTriangle(Triangle tWS)
     {
+
         Triangle tNDC = NDCTriangle(tWS);
         //sort so we got the points on the top, as p1..p2, 
         if (tNDC.mP2.y > tNDC.mP3.y) std::swap(tNDC.mP2, tNDC.mP3);
@@ -110,7 +127,6 @@ public:
         //longerSide = tNDC.mP1 -> tNDC.mP3;
         //shorterSide = tNDC.mP1 -> tNDC.mP2;
         //bottomSide = tNDC.mP2 -> tNDC.mP3;
-
         for (int i = tNDC.mP1.y; i < tNDC.mP2.y; i++)
         {
             int sx = Lerp(tNDC.mP1, tNDC.mP1 - tNDC.mP3, i);
@@ -191,10 +207,6 @@ public:
     };
 };
 
-sf::Color ShaderFunction(int x, int y, float depth)
-{
-    return sf::Color::White;
-}
 
 int main()
 {
@@ -207,13 +219,16 @@ int main()
         return sf::Color::Red;
     });
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)CANVAS_WIDTH / (float)CANVAS_HEIGHT, 0.1f, 100.0f);;
+    rast.proj = projection;
+    rast.invProj = glm::inverse(projection);
+
 
     Cube c;
     sf::Clock clk;
 
     canvasBuffer.create(CANVAS_WIDTH, CANVAS_HEIGHT, sf::Color::Black);
     texture.loadFromImage(canvasBuffer);
-    window.setFramerateLimit(20);
+    window.setFramerateLimit(60);
     mySprite.setTexture(texture);
 
     while (window.isOpen())
@@ -231,18 +246,10 @@ int main()
         rast.Clear();
 
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::scale(model, glm::vec3(0.5f));
+        model = glm::scale(model, glm::vec3(0.2f));
+        float timeFactor = glm::sin(clk.getElapsedTime().asSeconds());
+        model = glm::translate(model, glm::vec3(1.0f * timeFactor));
         model = glm::rotate(model, 6.28f * glm::sin(clk.getElapsedTime().asSeconds() / 2.0f), glm::vec3(1.0f, 1.0f, 1.0f));
-
-        int i = 0;
-        std::vector<sf::Color> colors = {
-            sf::Color::Red, sf::Color::Red,
-            sf::Color::Green, sf::Color::Green,
-            sf::Color::White, sf::Color::White,
-            sf::Color::Yellow, sf::Color::Yellow,
-            sf::Color::Magenta, sf::Color::Magenta,
-            sf::Color::Cyan, sf::Color::Cyan,
-        };
 
         for (auto& element : c.triangles)
         {
@@ -250,9 +257,7 @@ int main()
             glm::vec3 B = projection * model * glm::vec4(element.mP2, 1.0f);
             glm::vec3 C = projection * model * glm::vec4(element.mP3, 1.0f);
             Triangle t = { A, B, C };
-            rast.colorOverride = colors[i];
             rast.DrawTriangle(t);
-            i++;
         }
 
         texture.loadFromImage(canvasBuffer);
